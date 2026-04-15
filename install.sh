@@ -4,7 +4,6 @@ set -euo pipefail
 REPO="lukewoodstech/claude-skills"
 BRANCH="main"
 TARBALL_URL="https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
-REPO_DIR_NAME="claude-skills-${BRANCH}"
 
 usage() {
   echo "Usage:"
@@ -16,13 +15,17 @@ usage() {
   echo "  ./install.sh --list"
 }
 
+fetch_tarball() {
+  local tmpdir
+  tmpdir=$(mktemp -d)
+  curl -fsSL "$TARBALL_URL" | tar -xz -C "$tmpdir" --strip-components=1 2>/dev/null
+  echo "$tmpdir"
+}
+
 list_skills() {
   echo "Fetching available skills from ${REPO}..."
   local tmpdir
-  tmpdir=$(mktemp -d)
-  trap 'rm -rf "$tmpdir"' EXIT
-
-  curl -fsSL "$TARBALL_URL" | tar -xz -C "$tmpdir" --strip-components=1 2>/dev/null
+  tmpdir=$(fetch_tarball)
 
   local skills=()
   for dir in "$tmpdir/skills"/*/; do
@@ -35,7 +38,6 @@ list_skills() {
     echo ""
     echo "Available skills:"
     for skill in "${skills[@]}"; do
-      # Print the description from SKILL.md if present
       local skill_file="$tmpdir/skills/$skill/SKILL.md"
       if [ -f "$skill_file" ]; then
         local desc
@@ -46,6 +48,8 @@ list_skills() {
       fi
     done
   fi
+
+  rm -rf "$tmpdir"
 }
 
 install_skill() {
@@ -60,13 +64,11 @@ install_skill() {
 
   echo "Downloading skill '${skill_name}' from ${REPO}..."
   local tmpdir
-  tmpdir=$(mktemp -d)
-  trap 'rm -rf "$tmpdir"' EXIT
-
-  curl -fsSL "$TARBALL_URL" | tar -xz -C "$tmpdir" --strip-components=1 2>/dev/null
+  tmpdir=$(fetch_tarball)
 
   local skill_src="$tmpdir/skills/${skill_name}"
   if [ ! -d "$skill_src" ]; then
+    rm -rf "$tmpdir"
     echo "Error: skill '${skill_name}' not found in ${REPO}"
     echo "Run './install.sh --list' to see available skills."
     exit 1
@@ -74,6 +76,7 @@ install_skill() {
 
   mkdir -p ".claude/skills"
   cp -r "$skill_src" "$dest"
+  rm -rf "$tmpdir"
   echo "Installed '${skill_name}' to ${dest}"
 }
 
